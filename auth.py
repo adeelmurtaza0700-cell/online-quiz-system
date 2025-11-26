@@ -1,20 +1,25 @@
+import streamlit as st
+from database import SessionLocal, User
 import bcrypt
-from database import create_user, get_user
 
 def hash_password(password):
-    return bcrypt.hashpw(password.encode(), bcrypt.gensalt())
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 def verify_password(password, hashed):
-    return bcrypt.checkpw(password.encode(), hashed)
+    return bcrypt.checkpw(password.encode(), hashed.encode())
 
-def signup(username, password, role):
-    hashed = hash_password(password).decode()
-    return create_user(username, hashed, role)
+def register_user(name, email, password, role="student"):
+    db = SessionLocal()
+    hashed = hash_password(password)
+    user = User(name=name, email=email, password=hashed, role=role)
+    db.add(user)
+    db.commit()
+    db.close()
 
-def login(username, password):
-    res = get_user(username)
-    if res.data:
-        user = res.data[0]
-        if verify_password(password, user['password'].encode()):
-            return user
+def login_user(email, password):
+    db = SessionLocal()
+    user = db.query(User).filter(User.email==email).first()
+    db.close()
+    if user and verify_password(password, user.password):
+        return user
     return None
