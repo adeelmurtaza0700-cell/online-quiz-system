@@ -2,8 +2,11 @@
 
 import streamlit as st
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime
 from fpdf import FPDF
+import hashlib
+import random
+import string
 
 # ==============================
 # Database Setup
@@ -11,15 +14,26 @@ from fpdf import FPDF
 conn = sqlite3.connect('database.db', check_same_thread=False)
 c = conn.cursor()
 
-# Create tables
+# Users table (admin, teachers)
+c.execute('''CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE,
+                password TEXT,
+                role TEXT
+            )''')
+
+# Quizzes table
 c.execute('''CREATE TABLE IF NOT EXISTS quizzes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 title TEXT,
                 subject TEXT,
                 duration INTEGER,
-                instructions TEXT
+                instructions TEXT,
+                teacher_id INTEGER,
+                link TEXT
             )''')
 
+# Questions table
 c.execute('''CREATE TABLE IF NOT EXISTS questions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 quiz_id INTEGER,
@@ -29,6 +43,7 @@ c.execute('''CREATE TABLE IF NOT EXISTS questions (
                 answer TEXT
             )''')
 
+# Submissions table
 c.execute('''CREATE TABLE IF NOT EXISTS submissions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 quiz_id INTEGER,
@@ -44,19 +59,47 @@ conn.commit()
 # ==============================
 # Utility Functions
 # ==============================
-def create_quiz(title, subject, duration, instructions):
-    c.execute("INSERT INTO quizzes (title, subject, duration, instructions) VALUES (?, ?, ?, ?)",
-              (title, subject, duration, instructions))
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def verify_password(password, hashed):
+    return hash_password(password) == hashed
+
+def create_user(username, password, role):
+    try:
+        c.execute("INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
+                  (username, hash_password(password), role))
+        conn.commit()
+        return True
+    except:
+        return False
+
+def login_user(username, password):
+    c.execute("SELECT * FROM users WHERE username=?", (username,))
+    user = c.fetchone()
+    if user and verify_password(password, user[2]):
+        return user
+    return None
+
+def create_quiz(title, subject, duration, instructions, teacher_id):
+    link = ''.join(random.choices(string.ascii_letters + string.digits, k=6))
+    c.execute("INSERT INTO quizzes (title, subject, duration, instructions, teacher_id, link) VALUES (?, ?, ?, ?, ?, ?)",
+              (title, subject, duration, instructions, teacher_id, link))
     conn.commit()
+    return link
 
 def add_question(quiz_id, question, qtype, options, answer):
     c.execute("INSERT INTO questions (quiz_id, question, qtype, options, answer) VALUES (?, ?, ?, ?, ?)",
               (quiz_id, question, qtype, options, answer))
     conn.commit()
 
-def get_quizzes():
-    c.execute("SELECT * FROM quizzes")
+def get_teacher_quizzes(teacher_id):
+    c.execute("SELECT * FROM quizzes WHERE teacher_id=?", (teacher_id,))
     return c.fetchall()
+
+def get_quiz_by_link(link):
+    c.execute("SELECT * FROM quizzes WHERE link=?", (link,))
+    return c.fetchone()
 
 def get_questions(quiz_id):
     c.execute("SELECT * FROM questions WHERE quiz_id=?", (quiz_id,))
@@ -85,94 +128,112 @@ def generate_certificate(student_name, quiz_title, score):
 # ==============================
 st.title("Online Quiz & Exam System")
 
-menu = ["Home", "Teacher"]
+menu = ["Home", "Admin", "Teacher"]
 choice = st.sidebar.selectbox("Menu", menu)
+
+# -------------------------
+# Admin Section
+# -------------------------
+if choice == "Admin":
+    st.subheader("Admin Panel - Register Teacher")
+    username = st.text_input("Teacher Username")
+    password = st.text_input("Password", type='password')
+    if st.button("Register Teacher"):
+        if create_user(username, password, "teacher"):
+            st.success(f"Teacher {username} registered successfully!")
+        else:
+            st.error("Username already exists!")
 
 # -------------------------
 # Teacher Section
 # -------------------------
-if choice == "Teacher":
-    st.subheader("Teacher Dashboard")
-    
-    st.markdown("### Create Quiz")
-    title = st.text_input("Quiz Title")
-    subject = st.text_input("Subject")
-    duration = st.number_input("Duration (minutes)", 1, 180)
-    instructions = st.text_area("Instructions")
-    
-    if st.button("Create Quiz"):
-        create_quiz(title, subject, duration, instructions)
-        st.success("Quiz created successfully!")
-    
-    st.markdown("### Add Questions")
-    quizzes = get_quizzes()
-    if quizzes:
-        quiz_options = {q[1]: q[0] for q in quizzes}
-        selected_quiz = st.selectbox("Select Quiz", list(quiz_options.keys()))
-        question_text = st.text_area("Question")
-        qtype = st.selectbox("Question Type", ["MCQ", "True/False", "Short Answer", "Fill in the blanks"])
-        options_text = st.text_area("Options (comma separated for MCQ)")
-        answer_text = st.text_input("Answer")
+elif choice == "Teacher":
+    st.subheader("Teacher Login")
+    if 'teacher' not in st.session_state:
+        username = st.text_input("Username")
+        password = st.text_input("Password", type='password')
+        if st.button("Login"):
+            user = login_user(username, password)
+            if user and user[3] == "teacher":
+                st.success(f"Logged in as {username}")
+                st.session_state['teacher'] = user
+            else:
+                st.error("Invalid credentials")
+    else:
+        user = st.session_state['teacher']
+        st.write(f"Welcome, {user[1]}")
+        # Create quiz
+        st.markdown("### Create Quiz")
+        title = st.text_input("Quiz Title")
+        subject = st.text_input("Subject")
+        duration = st.number_input("Duration (minutes)", 1, 180)
+        instructions = st.text_area("Instructions")
+        if st.button("Create Quiz"):
+            link = create_quiz(title, subject, duration, instructions, user[0])
+            st.success(f"Quiz created! Share this link with students: **{link}**")
         
-        if st.button("Add Question"):
-            add_question(quiz_options[selected_quiz], question_text, qtype, options_text, answer_text)
-            st.success("Question added successfully!")
-    
-    st.markdown("### View Submissions")
-    for q in quizzes:
-        st.write(f"Quiz: {q[1]}")
-        c.execute("SELECT student_name, roll_number, score, answers FROM submissions WHERE quiz_id=?", (q[0],))
-        submissions = c.fetchall()
-        if submissions:
-            for s in submissions:
-                st.write(f"Student: {s[0]} | Roll: {s[1]} | Score: {s[2]} | Answers: {s[3]}")
-        else:
-            st.write("No submissions yet.")
+        # Add questions
+        quizzes = get_teacher_quizzes(user[0])
+        if quizzes:
+            quiz_options = {q[1]: q[0] for q in quizzes}
+            selected_quiz_name = st.selectbox("Select Quiz to Add Questions", list(quiz_options.keys()))
+            selected_quiz_id = quiz_options[selected_quiz_name]
+            question_text = st.text_area("Question")
+            qtype = st.selectbox("Question Type", ["MCQ", "True/False", "Short Answer", "Fill in the blanks"])
+            options_text = st.text_area("Options (comma separated for MCQ)")
+            answer_text = st.text_input("Answer")
+            if st.button("Add Question"):
+                add_question(selected_quiz_id, question_text, qtype, options_text, answer_text)
+                st.success("Question added successfully!")
+
+        # View submissions
+        st.markdown("### View Submissions")
+        for q in quizzes:
+            st.write(f"Quiz: {q[1]} (Link: {q[6]})")
+            c.execute("SELECT student_name, roll_number, score, answers FROM submissions WHERE quiz_id=?", (q[0],))
+            submissions = c.fetchall()
+            if submissions:
+                for s in submissions:
+                    st.write(f"Student: {s[0]} | Roll: {s[1]} | Score: {s[2]} | Answers: {s[3]}")
+            else:
+                st.write("No submissions yet.")
 
 # -------------------------
 # Student Section
 # -------------------------
 elif choice == "Home":
-    st.subheader("Available Quizzes")
-    quizzes = get_quizzes()
-    for q in quizzes:
-        st.write(f"**{q[1]}** | Subject: {q[2]} | Duration: {q[3]} minutes")
-        if st.button(f"Take Quiz: {q[1]}", key=f"quiz_{q[0]}"):
-            st.session_state['current_quiz'] = q[0]
-            st.session_state['quiz_start'] = datetime.now()
-    
-    if 'current_quiz' in st.session_state:
-        quiz_id = st.session_state['current_quiz']
-        start_time = st.session_state['quiz_start']
-        quiz = [q for q in quizzes if q[0] == quiz_id][0]
-        st.write(f"Quiz: {quiz[1]} | Duration: {quiz[3]} minutes")
-        student_name = st.text_input("Enter Your Name")
-        roll_number = st.text_input("Enter Your Roll Number")
-        questions = get_questions(quiz_id)
-        answers = {}
-        for i, ques in enumerate(questions):
-            st.write(f"Q{i+1}: {ques[2]}")
-            if ques[3] == "MCQ":
-                opts = ques[4].split(",")
-                ans = st.radio("Select an option", opts, key=f"{ques[0]}")
-                answers[ques[0]] = ans
-            elif ques[3] == "True/False":
-                ans = st.radio("Select True/False", ["True", "False"], key=f"{ques[0]}")
-                answers[ques[0]] = ans
-            else:
-                ans = st.text_input("Answer", key=f"{ques[0]}")
-                answers[ques[0]] = ans
-        
-        if st.button("Submit Quiz"):
-            score = 0
-            for ques in questions:
-                if ques[3] in ["MCQ", "True/False"] and answers[ques[0]] == ques[5]:
-                    score += 1
-            end_time = datetime.now()
-            record_submission(quiz_id, student_name, roll_number, start_time.strftime('%Y-%m-%d %H:%M:%S'),
-                              end_time.strftime('%Y-%m-%d %H:%M:%S'), score, answers)
-            st.success(f"Quiz submitted! Your score: {score}")
-            cert_file = generate_certificate(student_name, quiz[1], score)
-            st.download_button("Download Certificate", cert_file)
-            del st.session_state['current_quiz']
-            del st.session_state['quiz_start']
+    st.subheader("Take Quiz via Link")
+    quiz_link = st.text_input("Enter Quiz Link")
+    if quiz_link:
+        quiz = get_quiz_by_link(quiz_link)
+        if quiz:
+            st.write(f"Quiz: {quiz[1]} | Subject: {quiz[2]} | Duration: {quiz[3]} mins")
+            student_name = st.text_input("Your Name", key="sname")
+            roll_number = st.text_input("Your Roll Number", key="sroll")
+            questions = get_questions(quiz[0])
+            answers = {}
+            for i, ques in enumerate(questions):
+                st.write(f"Q{i+1}: {ques[2]}")
+                if ques[3] == "MCQ":
+                    opts = ques[4].split(",")
+                    ans = st.radio("Select an option", opts, key=f"{ques[0]}")
+                    answers[ques[0]] = ans
+                elif ques[3] == "True/False":
+                    ans = st.radio("Select True/False", ["True", "False"], key=f"{ques[0]}")
+                    answers[ques[0]] = ans
+                else:
+                    ans = st.text_input("Answer", key=f"{ques[0]}")
+                    answers[ques[0]] = ans
+            if st.button("Submit Quiz"):
+                score = 0
+                for ques in questions:
+                    if ques[3] in ["MCQ", "True/False"] and answers[ques[0]] == ques[5]:
+                        score += 1
+                start_time = datetime.now()
+                record_submission(quiz[0], student_name, roll_number, start_time.strftime('%Y-%m-%d %H:%M:%S'),
+                                  datetime.now().strftime('%Y-%m-%d %H:%M:%S'), score, answers)
+                st.success(f"Quiz submitted! Your score: {score}")
+                cert_file = generate_certificate(student_name, quiz[1], score)
+                st.download_button("Download Certificate", cert_file)
+        else:
+            st.error("Invalid quiz link!")
