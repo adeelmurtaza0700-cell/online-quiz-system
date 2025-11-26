@@ -1,6 +1,8 @@
-streamlit>=1.30.0
+streamlit
+streamlit_authenticator
 pandas
+sqlalchemy
 bcrypt
-requests
-supabase
+firebase-admin
 reportlab
+python-dotenv
