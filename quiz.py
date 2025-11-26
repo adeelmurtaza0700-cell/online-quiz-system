@@ -1,57 +1,23 @@
-from database import SessionLocal, Quiz, Question, Result
-import json
-import random
+import streamlit as st
+from database import execute_query, fetch_all
 
-def create_quiz(title, subject, duration, instructions, created_by):
-    db = SessionLocal()
-    quiz = Quiz(title=title, subject=subject, duration=duration, instructions=instructions, created_by=created_by)
-    db.add(quiz)
-    db.commit()
-    db.refresh(quiz)
-    db.close()
-    return quiz.id
+def create_quiz():
+    st.subheader("Create New Quiz")
+    title = st.text_input("Quiz Title")
+    subject = st.text_input("Subject")
+    duration = st.number_input("Duration (minutes)", min_value=5,max_value=180)
+    instructions = st.text_area("Instructions")
+    start_time = st.text_input("Start Time (YYYY-MM-DD HH:MM)")
+    end_time = st.text_input("End Time (YYYY-MM-DD HH:MM)")
+    if st.button("Create Quiz"):
+        execute_query(
+            "INSERT INTO quizzes (title,subject,duration,instructions,start_time,end_time,created_by) VALUES (%s,%s,%s,%s,%s,%s,%s)",
+            (title,subject,duration,instructions,start_time,end_time,st.session_state.user['id'])
+        )
+        st.success("Quiz Created!")
 
-def add_question(quiz_id, question_text, question_type, options, correct_answer):
-    db = SessionLocal()
-    question = Question(
-        quiz_id=quiz_id,
-        question_text=question_text,
-        question_type=question_type,
-        options=json.dumps(options) if options else None,
-        correct_answer=correct_answer
-    )
-    db.add(question)
-    db.commit()
-    db.close()
-
-def get_quizzes():
-    db = SessionLocal()
-    quizzes = db.query(Quiz).all()
-    db.close()
-    return quizzes
-
-def get_questions(quiz_id):
-    db = SessionLocal()
-    questions = db.query(Question).filter(Question.quiz_id==quiz_id).all()
-    db.close()
-    random.shuffle(questions)
-    return questions
-
-def grade_quiz(user_id, quiz_id, answers):
-    db = SessionLocal()
-    questions = db.query(Question).filter(Question.quiz_id==quiz_id).all()
-    score = 0
-    for q in questions:
-        if answers.get(str(q.id)) == q.correct_answer:
-            score += 1
-    result = Result(user_id=user_id, quiz_id=quiz_id, score=score)
-    db.add(result)
-    db.commit()
-    db.close()
-    return score
-
-def get_results(quiz_id):
-    db = SessionLocal()
-    results = db.query(Result).filter(Result.quiz_id==quiz_id).order_by(Result.score.desc()).all()
-    db.close()
-    return results
+def view_quizzes():
+    st.subheader("All Quizzes")
+    quizzes = fetch_all("SELECT * FROM quizzes")
+    for q in quizzes:
+        st.write(f"**ID {q['id']}** - {q['title']} | {q['subject']} | {q['duration']} min")
