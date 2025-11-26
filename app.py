@@ -5,25 +5,37 @@ from auth import send_otp, verify_otp
 st.set_page_config(page_title="Online Exam System", layout="wide")
 init_db()
 
+# Session
 if "user" not in st.session_state:
     st.session_state.user = None
 
 st.title("Online Quiz & Exam Management System")
 
+# -------------- LOGIN SCREEN --------------
 if not st.session_state.user:
-    email = st.text_input("Enter Email to Login")
+
+    email = st.text_input("Enter Email Address")
+
+    # Send OTP
     if st.button("Send OTP"):
         otp = send_otp(email)
-        st.success(f"Your OTP is: {otp}")  # Remove in production
+        st.success(f"OTP sent! (Demo Mode → OTP: **{otp}**)")
 
-    verify_code = st.text_input("Enter OTP")
-    if st.button("Verify"):
-        user = verify_otp(email, verify_code)
+    otp_in = st.text_input("Enter OTP")
+
+    # Verify
+    if st.button("Verify OTP"):
+        user = verify_otp(email, otp_in)
         if user:
-            st.session_state.user = user
-            st.experimental_rerun()
+            st.session_state.user = {
+                "id": user[0],
+                "email": email,
+                "role": user[1]
+            }
+            st.rerun()
         else:
-            st.error("Invalid OTP")
+            st.error("Invalid OTP. Try again.")
+
 else:
-    st.success(f"Logged in as {st.session_state.user[1]}")
-    st.sidebar.success("Use the sidebar menu to navigate pages.")
+    st.success(f"Logged in as: {st.session_state.user['email']}")
+    st.sidebar.info("Use the pages sidebar to navigate.")
