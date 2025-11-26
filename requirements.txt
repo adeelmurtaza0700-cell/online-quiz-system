@@ -1,0 +1,6 @@
+streamlit
+pandas
+bcrypt
+email-validator
+reportlab
+fpdf
