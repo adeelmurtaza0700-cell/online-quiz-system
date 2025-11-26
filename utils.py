@@ -1,11 +1,8 @@
-from reportlab.pdfgen import canvas
+import streamlit as st
+import time
 
-def generate_certificate(name, quiz_title, score, file_path):
-    c = canvas.Canvas(file_path)
-    c.setFont("Helvetica-Bold", 24)
-    c.drawCentredString(300, 500, "Certificate of Completion")
-    c.setFont("Helvetica", 18)
-    c.drawCentredString(300, 450, f"Presented to: {name}")
-    c.drawCentredString(300, 400, f"For completing the quiz: {quiz_title}")
-    c.drawCentredString(300, 350, f"Score: {score}")
-    c.save()
+def start_timer(minutes):
+    st.info(f"Exam Timer: {minutes} minutes")
+    for i in range(minutes*60,0,-1):
+        st.progress(i/(minutes*60))
+        time.sleep(1)
