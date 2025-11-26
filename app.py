@@ -68,16 +68,16 @@ def verify_password(password, hashed):
 def create_user(username, password, role):
     try:
         c.execute("INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
-                  (username, hash_password(password), role))
+                  (username.strip(), hash_password(password.strip()), role))
         conn.commit()
         return True
     except:
         return False
 
 def login_user(username, password):
-    c.execute("SELECT * FROM users WHERE username=?", (username,))
+    c.execute("SELECT * FROM users WHERE username=?", (username.strip(),))
     user = c.fetchone()
-    if user and verify_password(password, user[2]):
+    if user and verify_password(password.strip(), user[2]):
         return user
     return None
 
@@ -131,22 +131,22 @@ st.title("Online Quiz & Exam System")
 menu = ["Home", "Admin", "Teacher"]
 choice = st.sidebar.selectbox("Menu", menu)
 
-# -------------------------
+# ==========================
 # Admin Section
-# -------------------------
+# ==========================
 if choice == "Admin":
     st.subheader("Admin Panel - Register Teacher")
     username = st.text_input("Teacher Username")
     password = st.text_input("Password", type='password')
     if st.button("Register Teacher"):
         if create_user(username, password, "teacher"):
-            st.success(f"Teacher {username} registered successfully!")
+            st.success(f"Teacher '{username}' registered successfully!")
         else:
             st.error("Username already exists!")
 
-# -------------------------
+# ==========================
 # Teacher Section
-# -------------------------
+# ==========================
 elif choice == "Teacher":
     st.subheader("Teacher Login")
     if 'teacher' not in st.session_state:
@@ -158,21 +158,22 @@ elif choice == "Teacher":
                 st.success(f"Logged in as {username}")
                 st.session_state['teacher'] = user
             else:
-                st.error("Invalid credentials")
+                st.error("Invalid credentials or not a teacher")
     else:
         user = st.session_state['teacher']
-        st.write(f"Welcome, {user[1]}")
-        # Create quiz
+        st.write(f"Welcome, {user[1]}!")
+
+        # Create Quiz
         st.markdown("### Create Quiz")
-        title = st.text_input("Quiz Title")
-        subject = st.text_input("Subject")
-        duration = st.number_input("Duration (minutes)", 1, 180)
-        instructions = st.text_area("Instructions")
+        title = st.text_input("Quiz Title", key="quiz_title")
+        subject = st.text_input("Subject", key="quiz_subject")
+        duration = st.number_input("Duration (minutes)", 1, 180, key="quiz_duration")
+        instructions = st.text_area("Instructions", key="quiz_instructions")
         if st.button("Create Quiz"):
             link = create_quiz(title, subject, duration, instructions, user[0])
             st.success(f"Quiz created! Share this link with students: **{link}**")
-        
-        # Add questions
+
+        # Add Questions
         quizzes = get_teacher_quizzes(user[0])
         if quizzes:
             quiz_options = {q[1]: q[0] for q in quizzes}
@@ -186,7 +187,7 @@ elif choice == "Teacher":
                 add_question(selected_quiz_id, question_text, qtype, options_text, answer_text)
                 st.success("Question added successfully!")
 
-        # View submissions
+        # View Submissions
         st.markdown("### View Submissions")
         for q in quizzes:
             st.write(f"Quiz: {q[1]} (Link: {q[6]})")
@@ -198,9 +199,9 @@ elif choice == "Teacher":
             else:
                 st.write("No submissions yet.")
 
-# -------------------------
+# ==========================
 # Student Section
-# -------------------------
+# ==========================
 elif choice == "Home":
     st.subheader("Take Quiz via Link")
     quiz_link = st.text_input("Enter Quiz Link")
