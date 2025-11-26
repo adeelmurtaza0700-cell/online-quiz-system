@@ -1,28 +1,20 @@
-import random
-from email_validator import validate_email, EmailNotValidError
-from database import get_conn
+import bcrypt
+from database import create_user, get_user
 
-def generate_otp():
-    return str(random.randint(100000, 999999))
+def hash_password(password):
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt())
 
-def send_otp(email):
-    otp = generate_otp()
-    conn = get_conn()
-    c = conn.cursor()
+def verify_password(password, hashed):
+    return bcrypt.checkpw(password.encode(), hashed)
 
-    c.execute("SELECT id FROM users WHERE email=?", (email,))
-    user = c.fetchone()
+def signup(username, password, role):
+    hashed = hash_password(password).decode()
+    return create_user(username, hashed, role)
 
-    if user:
-        c.execute("UPDATE users SET otp=? WHERE email=?", (otp, email))
-    else:
-        c.execute("INSERT INTO users (email, otp, role) VALUES (?, ?, ?)", (email, otp, "student"))
-
-    conn.commit()
-    return otp  # In real system you send via SMTP — here we display it.
-
-def verify_otp(email, otp):
-    conn = get_conn()
-    c = conn.cursor()
-    c.execute("SELECT id, role FROM users WHERE email=? AND otp=?", (email, otp))
-    return c.fetchone()
+def login(username, password):
+    res = get_user(username)
+    if res.data:
+        user = res.data[0]
+        if verify_password(password, user['password'].encode()):
+            return user
+    return None
