@@ -1,8 +1,8 @@
 streamlit
-streamlit_authenticator
 pandas
 sqlalchemy
+psycopg2-binary
 bcrypt
-firebase-admin
-reportlab
+fpdf
 python-dotenv
+reportlab
