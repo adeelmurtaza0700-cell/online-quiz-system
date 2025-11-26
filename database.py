@@ -1,21 +1,19 @@
 from sqlalchemy import create_engine, Column, Integer, String, Text, JSON, ForeignKey, DateTime
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship
+from sqlalchemy.orm import sessionmaker
 import datetime
-import os
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///quiz.db")  # SQLite for testing
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+engine = create_engine("sqlite:///quiz.db", connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
 
 class User(Base):
     __tablename__ = "users"
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     name = Column(String(50))
     email = Column(String(50), unique=True)
     password = Column(String(200))
-    role = Column(String(20))
+    role = Column(String(20))  # admin, teacher, student
 
 class Quiz(Base):
     __tablename__ = "quizzes"
