@@ -1,67 +1,39 @@
-import sqlite3
-import os
+from supabase import create_client
+from data.config import SUPABASE_URL, SUPABASE_KEY
 
-def get_conn():
-    # Ensure data folder exists
-    if not os.path.exists("data"):
-        os.makedirs("data")
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-    # Ensure database file exists
-    db_path = "data/quiz.db"
-    conn = sqlite3.connect(db_path, check_same_thread=False)
-    return conn
+# Users table: id, username, password, role
+# Quizzes table: id, title
+# Questions table: id, quiz_id, question, opt1, opt2, opt3, opt4, answer
+# Results table: id, user_id, quiz_id, score
+# Leaderboard table: user_id, total_score
 
+def create_user(username, password, role):
+    return supabase.table("users").insert({"username": username, "password": password, "role": role}).execute()
 
-def init_db():
-    conn = get_conn()
-    c = conn.cursor()
+def get_user(username):
+    return supabase.table("users").select("*").eq("username", username).execute()
 
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        email TEXT UNIQUE,
-        otp TEXT,
-        role TEXT
-    )
-    """)
+def add_quiz(title):
+    return supabase.table("quizzes").insert({"title": title}).execute()
 
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS quizzes (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        title TEXT,
-        duration INTEGER
-    )
-    """)
+def add_question(quiz_id, question, opt1, opt2, opt3, opt4, answer):
+    return supabase.table("questions").insert({
+        "quiz_id": quiz_id, "question": question, "opt1": opt1,
+        "opt2": opt2, "opt3": opt3, "opt4": opt4, "answer": answer
+    }).execute()
 
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS questions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        quiz_id INTEGER,
-        question TEXT,
-        opt1 TEXT, opt2 TEXT, opt3 TEXT, opt4 TEXT,
-        answer TEXT
-    )
-    """)
+def get_quizzes():
+    return supabase.table("quizzes").select("*").execute()
 
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS results (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        quiz_id INTEGER,
-        score INTEGER,
-        date TEXT
-    )
-    """)
+def get_questions(quiz_id):
+    return supabase.table("questions").select("*").eq("quiz_id", quiz_id).execute()
 
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS attempts (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        quiz_id INTEGER,
-        started INTEGER,
-        finished INTEGER
-    )
-    """)
+def save_result(user_id, quiz_id, score):
+    supabase.table("results").insert({"user_id": user_id, "quiz_id": quiz_id, "score": score}).execute()
+    # Update leaderboard
+    supabase.table("leaderboard").upsert({"user_id": user_id, "total_score": score}, on_conflict="user_id").execute()
 
-    conn.commit()
-    conn.close()
+def get_leaderboard():
+    return supabase.table("leaderboard").select("*").order("total_score", desc=True).execute()
