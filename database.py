@@ -1,7 +1,16 @@
 import sqlite3
+import os
 
 def get_conn():
-    return sqlite3.connect("data/quiz.db", check_same_thread=False)
+    # Ensure data folder exists
+    if not os.path.exists("data"):
+        os.makedirs("data")
+
+    # Ensure database file exists
+    db_path = "data/quiz.db"
+    conn = sqlite3.connect(db_path, check_same_thread=False)
+    return conn
+
 
 def init_db():
     conn = get_conn()
