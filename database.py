@@ -1,44 +1,28 @@
-from sqlalchemy import create_engine, Column, Integer, String, Text, JSON, ForeignKey, DateTime
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-import datetime
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from dotenv import load_dotenv
+import os
 
-engine = create_engine("sqlite:///quiz.db", connect_args={"check_same_thread": False})
-SessionLocal = sessionmaker(bind=engine)
-Base = declarative_base()
+load_dotenv()
 
-class User(Base):
-    __tablename__ = "users"
-    id = Column(Integer, primary_key=True)
-    name = Column(String(50))
-    email = Column(String(50), unique=True)
-    password = Column(String(200))
-    role = Column(String(20))  # admin, teacher, student
+conn = psycopg2.connect(
+    host=os.getenv("DB_HOST"),
+    database=os.getenv("DB_NAME"),
+    user=os.getenv("DB_USER"),
+    password=os.getenv("DB_PASS")
+)
 
-class Quiz(Base):
-    __tablename__ = "quizzes"
-    id = Column(Integer, primary_key=True)
-    title = Column(String(100))
-    subject = Column(String(50))
-    duration = Column(Integer)  # minutes
-    instructions = Column(Text)
-    created_by = Column(Integer, ForeignKey("users.id"))
+def execute_query(query, params=None):
+    with conn.cursor() as cur:
+        cur.execute(query, params)
+        conn.commit()
 
-class Question(Base):
-    __tablename__ = "questions"
-    id = Column(Integer, primary_key=True)
-    quiz_id = Column(Integer, ForeignKey("quizzes.id"))
-    question_text = Column(Text)
-    question_type = Column(String(20))  # MCQ, True/False, ShortAnswer
-    options = Column(JSON, nullable=True)
-    correct_answer = Column(String(200))
+def fetch_one(query, params=None):
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(query, params)
+        return cur.fetchone()
 
-class Result(Base):
-    __tablename__ = "results"
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
-    quiz_id = Column(Integer, ForeignKey("quizzes.id"))
-    score = Column(Integer)
-    submitted_at = Column(DateTime, default=datetime.datetime.utcnow)
-
-Base.metadata.create_all(bind=engine)
+def fetch_all(query, params=None):
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(query, params)
+        return cur.fetchall()
