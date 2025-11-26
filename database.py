@@ -1,37 +1,46 @@
-from supabase import create_client
-from data.config import SUPABASE_URL, SUPABASE_KEY
+from sqlalchemy import create_engine, Column, Integer, String, Text, JSON, ForeignKey, DateTime
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, relationship
+import datetime
+import os
 
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///quiz.db")  # SQLite for testing
+engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+SessionLocal = sessionmaker(bind=engine)
+Base = declarative_base()
 
-# Users table
-def create_user(username, password, role):
-    return supabase.table("users").insert({"username": username, "password": password, "role": role}).execute()
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(50))
+    email = Column(String(50), unique=True)
+    password = Column(String(200))
+    role = Column(String(20))
 
-def get_user(username):
-    return supabase.table("users").select("*").eq("username", username).execute()
+class Quiz(Base):
+    __tablename__ = "quizzes"
+    id = Column(Integer, primary_key=True)
+    title = Column(String(100))
+    subject = Column(String(50))
+    duration = Column(Integer)  # minutes
+    instructions = Column(Text)
+    created_by = Column(Integer, ForeignKey("users.id"))
 
-# Quizzes
-def add_quiz(title):
-    return supabase.table("quizzes").insert({"title": title}).execute()
+class Question(Base):
+    __tablename__ = "questions"
+    id = Column(Integer, primary_key=True)
+    quiz_id = Column(Integer, ForeignKey("quizzes.id"))
+    question_text = Column(Text)
+    question_type = Column(String(20))  # MCQ, True/False, ShortAnswer
+    options = Column(JSON, nullable=True)
+    correct_answer = Column(String(200))
 
-def get_quizzes():
-    return supabase.table("quizzes").select("*").execute()
+class Result(Base):
+    __tablename__ = "results"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    quiz_id = Column(Integer, ForeignKey("quizzes.id"))
+    score = Column(Integer)
+    submitted_at = Column(DateTime, default=datetime.datetime.utcnow)
 
-# Questions
-def add_question(quiz_id, question, opt1, opt2, opt3, opt4, answer):
-    return supabase.table("questions").insert({
-        "quiz_id": quiz_id, "question": question,
-        "opt1": opt1, "opt2": opt2, "opt3": opt3, "opt4": opt4,
-        "answer": answer
-    }).execute()
-
-def get_questions(quiz_id):
-    return supabase.table("questions").select("*").eq("quiz_id", quiz_id).execute()
-
-# Results
-def save_result(user_id, quiz_id, score):
-    supabase.table("results").insert({"user_id": user_id, "quiz_id": quiz_id, "score": score}).execute()
-    supabase.table("leaderboard").upsert({"user_id": user_id, "total_score": score}, on_conflict="user_id").execute()
-
-def get_leaderboard():
-    return supabase.table("leaderboard").select("*").order("total_score", desc=True).execute()
+Base.metadata.create_all(bind=engine)
