@@ -1,49 +1,36 @@
 import streamlit as st
-from auth import signup, login
-from admin import admin_dashboard
-from student import student_dashboard
-from database import supabase
+from auth import register_user, login_user
+from quiz import create_quiz, add_question
+from evaluation import grade_quiz
 
-st.set_page_config(page_title="Online Quiz System", layout="wide")
+st.title("Online Quiz and Exam System")
 
-# --- Session State ---
-if "user" not in st.session_state:
-    st.session_state.user = None
-
-st.title("📝 Online Quiz & Exam Management System")
-
-menu = ["Login", "Signup"]
+menu = ["Home", "Login", "Register"]
 choice = st.sidebar.selectbox("Menu", menu)
 
-# --- Signup ---
-if choice == "Signup":
-    username = st.text_input("Username")
+if choice == "Register":
+    st.subheader("Create New Account")
+    name = st.text_input("Name")
+    email = st.text_input("Email")
     password = st.text_input("Password", type="password")
-    role = st.selectbox("Role", ["admin", "student"])
-    if st.button("Create Account"):
-        if signup(username, password, role):
-            st.success("Account created! Login now.")
-        else:
-            st.error("Username already exists.")
+    role = st.selectbox("Role", ["student", "teacher"])
+    if st.button("Register"):
+        register_user(name, email, password, role)
+        st.success("Account created successfully")
 
-# --- Login ---
 elif choice == "Login":
-    username = st.text_input("Username")
+    st.subheader("Login")
+    email = st.text_input("Email")
     password = st.text_input("Password", type="password")
     if st.button("Login"):
-        user = login(username, password)
+        user = login_user(email, password)
         if user:
-            st.session_state.user = user
-            st.experimental_rerun()
+            st.success(f"Welcome {user.name} ({user.role})")
+            if user.role == "teacher":
+                st.subheader("Teacher Dashboard")
+                # Add quiz creation UI here
+            elif user.role == "student":
+                st.subheader("Student Dashboard")
+                # Add quiz taking UI here
         else:
-            st.error("Incorrect username or password.")
-
-# --- After login ---
-if st.session_state.user:
-    user = st.session_state.user
-    st.sidebar.success(f"Logged in as {user['role']} | {user['username']}")
-
-    if user["role"] == "admin":
-        admin_dashboard()
-    else:
-        student_dashboard(user)
+            st.error("Invalid credentials")
