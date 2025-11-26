@@ -68,16 +68,18 @@ def verify_password(password, hashed):
 def create_user(username, password, role):
     try:
         c.execute("INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
-                  (username.strip(), hash_password(password.strip()), role))
+                  (username.strip(), hash_password(password.strip()), role.strip().lower()))
         conn.commit()
         return True
     except:
         return False
 
 def login_user(username, password):
-    c.execute("SELECT * FROM users WHERE username=?", (username.strip(),))
+    username = username.strip()
+    password = password.strip()
+    c.execute("SELECT * FROM users WHERE username=?", (username,))
     user = c.fetchone()
-    if user and verify_password(password.strip(), user[2]):
+    if user and verify_password(password, user[2]):
         return user
     return None
 
@@ -98,7 +100,7 @@ def get_teacher_quizzes(teacher_id):
     return c.fetchall()
 
 def get_quiz_by_link(link):
-    c.execute("SELECT * FROM quizzes WHERE link=?", (link,))
+    c.execute("SELECT * FROM quizzes WHERE link=?", (link.strip(),))
     return c.fetchone()
 
 def get_questions(quiz_id):
@@ -154,7 +156,7 @@ elif choice == "Teacher":
         password = st.text_input("Password", type='password')
         if st.button("Login"):
             user = login_user(username, password)
-            if user and user[3] == "teacher":
+            if user and user[3].strip().lower() == "teacher":
                 st.success(f"Logged in as {username}")
                 st.session_state['teacher'] = user
             else:
