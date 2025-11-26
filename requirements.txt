@@ -1,6 +1,8 @@
 streamlit
 pandas
 bcrypt
-email-validator
-reportlab
-fpdf
+requests
+supabase
+reportlab       # PDF generation
+random
+time
